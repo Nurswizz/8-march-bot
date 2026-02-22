@@ -2,7 +2,9 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 import os
 from dotenv import load_dotenv
+from config.db import init_db
 
+init_db()
 load_dotenv()
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
