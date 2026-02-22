@@ -8,4 +8,5 @@ class User(Base):
     telegram_id = Column(Integer, unique=True, index=True)
     username = Column(String, nullable=True)
     name = Column(String, nullable=False)
+    isAdmin = Column(Integer, default=0)
 
