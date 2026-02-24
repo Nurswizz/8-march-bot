@@ -1,5 +1,6 @@
 from models.User import User
 from config.db import get_db
+from services.WishesService import WishesService
 
 class UserService: 
     @staticmethod
@@ -31,6 +32,9 @@ class UserService:
             user = db.query(User).filter(User.telegram_id == telegram_id).first()
             if user:
                 db.delete(user)
+                wishes = WishesService.get_wishes_by_user_id(user.id)
+                for wish in wishes:
+                    db.delete(wish)
                 db.commit()
                 return True
             return False
