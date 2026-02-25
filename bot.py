@@ -167,7 +167,7 @@ async def add_wish_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["user_is_admin"] = user.isAdmin
 
     await update.message.reply_text(
-        "✍️ Send your wish text:",
+        "✍️ Send your wish text (with links if avalaible):",
         reply_markup=ReplyKeyboardRemove(),
     )
     return WAITING_FOR_WISH
