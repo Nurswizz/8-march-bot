@@ -3,6 +3,7 @@ from telegram.ext import (
     ApplicationBuilder, CommandHandler, ContextTypes,
     MessageHandler, filters, ConversationHandler, CallbackQueryHandler
 )
+from telegram.helpers import escape_markdown
 import os
 from dotenv import load_dotenv
 from config.db import init_db
@@ -327,14 +328,21 @@ async def admin_view_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
         wishes = WishesService.get_wishes_by_user_id(u.id)
         admin_badge = " 👑" if u.isAdmin else ""
         username_str = f"@{u.username}" if u.username else "no username"
+
+        # Экранируем имя и username
+        name_safe = escape_markdown(u.name, version=2)
+        username_safe = escape_markdown(username_str, version=2)
+
         lines.append(
-            f"• *{u.name}*{admin_badge} ({username_str})\n"
+            f"• *{name_safe}*{admin_badge} ({username_safe})\n"
             f"  📋 {len(wishes)} wish{'es' if len(wishes) != 1 else ''} | ID: `{u.telegram_id}`"
         )
 
+    message_text = f"👥 *All Users* ({len(users)} total)\n\n" + "\n\n".join(lines)
+
     await update.message.reply_text(
-        f"👥 *All Users* ({len(users)} total)\n\n" + "\n\n".join(lines),
-        parse_mode="Markdown",
+        message_text,
+        parse_mode="MarkdownV2",  # теперь безопасно
         reply_markup=admin_menu(),
     )
 
