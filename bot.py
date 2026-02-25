@@ -366,23 +366,13 @@ async def admin_view_wishes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for uid, wishes in grouped.items():
         u = users.get(uid)
         owner = u.name if u else f"User {uid}"
-        lines.append(f"👤 *{owner}*")
+        lines.append(f"👤 {owner}")
         for w in wishes:
             lines.append(f"  • {w.text} (Priority: {w.priority})")
 
-    full_message = f"🎁 *All Wishes* ({len(all_wishes)} total)\n\n" + "\n".join(lines)
+    full_message = f"🎁 All Wishes ({len(all_wishes)} total)\n\n" + "\n".join(lines)
 
-    # Telegram max message length is 4096 chars — chunk if needed
-    if len(full_message) <= 4096:
-        await update.message.reply_text(full_message, parse_mode="Markdown", reply_markup=admin_menu())
-    else:
-        chunks = [full_message[i:i+4000] for i in range(0, len(full_message), 4000)]
-        for i, chunk in enumerate(chunks):
-            await update.message.reply_text(
-                chunk,
-                parse_mode="Markdown",
-                reply_markup=admin_menu() if i == len(chunks) - 1 else None,
-            )
+    await update.message.reply_text(full_message, reply_markup=admin_menu())
 
 async def admin_delete_user_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = _get_user(update.effective_user.id)
