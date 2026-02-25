@@ -367,6 +367,7 @@ async def admin_view_wishes(update: Update, context: ContextTypes.DEFAULT_TYPE):
         u = users.get(uid)
         owner = u.name if u else f"User {uid}"
         lines.append(f"👤 {owner}")
+        
         for w in wishes:
             lines.append(f"  • {w.text} (Priority: {w.priority})")
 
