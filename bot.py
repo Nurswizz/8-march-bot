@@ -17,6 +17,7 @@ TOKEN = os.getenv("TELEGRAM_TOKEN")
 # ── Conversation states ──────────────────────────────────────────────────────
 WAITING_FOR_NAME = 1
 WAITING_FOR_WISH = 2
+WAITING_FOR_PRIORITY = 3
 
 # ── Keyboards ────────────────────────────────────────────────────────────────
 def main_menu(isAdmin=False):
@@ -39,10 +40,17 @@ def admin_menu():
         input_field_placeholder="Admin options...",
     )
 
+def priority_keyboard():
+    rows = []
+    nums = list(range(1, 11))
+    for i in range(0, 10, 5):
+        rows.append([str(n) for n in nums[i:i+5]])
+    return ReplyKeyboardMarkup(rows, resize_keyboard=True, one_time_keyboard=True)
+
 def wishes_inline(wishes):
     buttons = []
     for w in wishes:
-        label = w.text if len(w.text) <= 35 else w.text[:32] + "…"
+        label = f"[{w.priority}] {w.text}" if len(w.text) <= 30 else f"[{w.priority}] {w.text[:27]}…"
         buttons.append([
             InlineKeyboardButton(f"📝 {label}", callback_data=f"noop_{w.id}"),
             InlineKeyboardButton("❌", callback_data=f"delete_{w.id}"),
@@ -50,15 +58,15 @@ def wishes_inline(wishes):
     return InlineKeyboardMarkup(buttons)
 
 def confirm_delete_inline(wish_id: int):
-    return InlineKeyboardMarkup([[
+    return InlineKeyboardMarkup([[ 
         InlineKeyboardButton("✅ Yes, delete", callback_data=f"confirm_{wish_id}"),
-        InlineKeyboardButton("🚫 Cancel",      callback_data="cancel_delete"),
+        InlineKeyboardButton("🚫 Cancel", callback_data="cancel_delete"),
     ]])
 
 def admin_delete_user_inline(telegram_id: int):
-    return InlineKeyboardMarkup([[
+    return InlineKeyboardMarkup([[ 
         InlineKeyboardButton("✅ Yes, delete user", callback_data=f"admin_delete_{telegram_id}"),
-        InlineKeyboardButton("🚫 Cancel",           callback_data="admin_cancel_delete"),
+        InlineKeyboardButton("🚫 Cancel", callback_data="admin_cancel_delete"),
     ]])
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -138,6 +146,9 @@ async def show_wishes(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
+    # Sort by priority descending
+    wishes.sort(key=lambda x: x.priority, reverse=True)
+
     await update.message.reply_text(
         f"🎁 *Your Wishlist* ({len(wishes)} item{'s' if len(wishes) != 1 else ''})\n\nTap ❌ next to any wish to delete it:",
         parse_mode="Markdown",
@@ -153,24 +164,46 @@ async def add_wish_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data["user_id"] = user.id
     context.user_data["user_is_admin"] = user.isAdmin
+
     await update.message.reply_text(
-        "✍️ What would you like to add to your wishlist?\n\n_Type your wish below or /cancel to go back._",
-        parse_mode="Markdown",
+        "✍️ Send your wish text:",
         reply_markup=ReplyKeyboardRemove(),
     )
     return WAITING_FOR_WISH
 
-async def add_wish_save(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def add_wish_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     wish_text = update.message.text.strip()
     if not wish_text:
         await update.message.reply_text("Please enter a valid wish.")
         return WAITING_FOR_WISH
 
-    user_id = context.user_data.get("user_id")
-    is_admin = context.user_data.get("user_is_admin", False)
-    WishesService.create_wish(user_id, wish_text)
+    context.user_data["wish_text"] = wish_text
+
     await update.message.reply_text(
-        f"✅ Added to your wishlist:\n*{wish_text}*\n\nWhat next?",
+        "⭐ Choose priority (1–10):",
+        reply_markup=priority_keyboard(),
+    )
+    return WAITING_FOR_PRIORITY
+
+async def add_wish_priority(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text.strip()
+    if not text.isdigit():
+        await update.message.reply_text("Send a number 1–10.")
+        return WAITING_FOR_PRIORITY
+
+    priority = int(text)
+    if not 1 <= priority <= 10:
+        await update.message.reply_text("Priority must be 1–10.")
+        return WAITING_FOR_PRIORITY
+
+    user_id = context.user_data["user_id"]
+    is_admin = context.user_data["user_is_admin"]
+    wish_text = context.user_data["wish_text"]
+
+    WishesService.create_wish(user_id, wish_text, priority)
+
+    await update.message.reply_text(
+        f"✅ Added:\n*{wish_text}*\nPriority: {priority}",
         parse_mode="Markdown",
         reply_markup=main_menu(isAdmin=is_admin),
     )
@@ -188,7 +221,8 @@ async def share_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Your wishlist is empty — nothing to share yet!")
         return
 
-    lines = "\n".join(f"• {w.text}" for w in wishes)
+    wishes.sort(key=lambda x: x.priority, reverse=True)
+    lines = "\n".join(f"• [{w.priority}] {w.text}" for w in wishes)
     await update.message.reply_text(
         f"Here's your shareable list — just forward this message!\n\n🎁 *{user.name}'s Wishlist*\n\n{lines}",
         parse_mode="Markdown",
@@ -212,6 +246,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         success = WishesService.delete_wish(wish_id, user.id)
         if success:
             wishes = WishesService.get_wishes_by_user_id(user.id)
+            wishes.sort(key=lambda x: x.priority, reverse=True)
             if wishes:
                 await query.edit_message_text(
                     f"✅ Wish deleted!\n\n🎁 *Your Wishlist* ({len(wishes)} item{'s' if len(wishes) != 1 else ''})\n\nTap ❌ next to any wish to delete it:",
@@ -226,6 +261,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "cancel_delete":
         user = _get_user(query.from_user.id)
         wishes = WishesService.get_wishes_by_user_id(user.id)
+        wishes.sort(key=lambda x: x.priority, reverse=True)
         await query.edit_message_reply_markup(reply_markup=wishes_inline(wishes))
 
     # ── Admin user deletion ──────────────────────────────────────────────────
@@ -265,6 +301,15 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown",
         reply_markup=admin_menu(),
     )
+
+# ── /cancel ──────────────────────────────────────────────────────────────────
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = _get_user(update.effective_user.id)
+    await update.message.reply_text(
+        "Cancelled. 👍",
+        reply_markup=main_menu(isAdmin=user.isAdmin if user else False),
+    )
+    return ConversationHandler.END
 
 async def admin_view_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = _get_user(update.effective_user.id)
@@ -316,7 +361,7 @@ async def admin_view_wishes(update: Update, context: ContextTypes.DEFAULT_TYPE):
         owner = u.name if u else f"User {uid}"
         lines.append(f"👤 *{owner}*")
         for w in wishes:
-            lines.append(f"  • {w.text}")
+            lines.append(f"  • {w.text} (Priority: {w.priority})")
 
     full_message = f"🎁 *All Wishes* ({len(all_wishes)} total)\n\n" + "\n".join(lines)
 
@@ -359,15 +404,6 @@ async def admin_delete_user_start(update: Update, context: ContextTypes.DEFAULT_
         reply_markup=InlineKeyboardMarkup(buttons),
     )
 
-# ── /cancel ──────────────────────────────────────────────────────────────────
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = _get_user(update.effective_user.id)
-    await update.message.reply_text(
-        "Cancelled. 👍",
-        reply_markup=main_menu(isAdmin=user.isAdmin if user else False),
-    )
-    return ConversationHandler.END
-
 # ── App setup ────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     app = ApplicationBuilder().token(TOKEN).build()
@@ -386,7 +422,8 @@ if __name__ == "__main__":
             MessageHandler(filters.Regex("^➕ Add Wish$"), add_wish_start),
         ],
         states={
-            WAITING_FOR_WISH: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_wish_save)],
+            WAITING_FOR_WISH: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_wish_text)],
+            WAITING_FOR_PRIORITY: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_wish_priority)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
     )
@@ -394,13 +431,11 @@ if __name__ == "__main__":
     app.add_handler(registration_handler)
     app.add_handler(add_wish_handler)
 
-    # Admin menu taps — registered BEFORE main menu to avoid conflicts
     app.add_handler(MessageHandler(
         filters.Regex("^(👥 View All Users|🎁 View All Wishes|🗑️ Delete User|⬅️ Back to Main Menu)$"),
         handle_admin_menu,
     ))
 
-    # Main menu taps (➕ Add Wish is handled by conversation above)
     app.add_handler(MessageHandler(
         filters.Regex("^(🎁 My Wishes|🔗 Share My List|🛠️ Admin Panel)$"),
         handle_menu,

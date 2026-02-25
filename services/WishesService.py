@@ -3,9 +3,12 @@ from models.Wish import Wish
 
 class WishesService:
     @staticmethod
-    def create_wish(user_id: int, wish_text: str):
+    def create_wish(user_id: int, wish_text: str, priority: int = 5):
+        if priority < 1 or priority > 10:
+            raise ValueError("Priority must be between 1 and 10")
+        
         with get_db() as db:
-            wish = Wish(user_id=user_id, text=wish_text)
+            wish = Wish(user_id=user_id, text=wish_text, priority=priority)
             db.add(wish)
             db.commit()
             db.refresh(wish)
