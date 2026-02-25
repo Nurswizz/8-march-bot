@@ -329,20 +329,15 @@ async def admin_view_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
         admin_badge = " 👑" if u.isAdmin else ""
         username_str = f"@{u.username}" if u.username else "no username"
 
-        # Полное экранирование для MarkdownV2
         name_safe = escape_markdown(u.name, version=2)
         username_safe = escape_markdown(username_str, version=2)
 
-        # Экрануем круглые скобки вручную
-        name_safe = name_safe.replace("(", r"\(").replace(")", r"\)")
-        username_safe = username_safe.replace("(", r"\(").replace(")", r"\)")
-
         lines.append(
-            f"• *{name_safe}*{admin_badge} ({username_safe})\n"
+            f"• *{name_safe}*{admin_badge} \\({username_safe}\\)\n"
             f"  📋 {len(wishes)} wish{'es' if len(wishes) != 1 else ''} | ID: `{u.telegram_id}`"
         )
 
-    message_text = f"👥 *All Users* ({len(users)} total)\n\n" + "\n\n".join(lines)
+    message_text = f"👥 *All Users* \\({len(users)} total\\)\n\n" + "\n\n".join(lines)
 
     await update.message.reply_text(
         message_text,
