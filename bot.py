@@ -334,7 +334,7 @@ async def admin_view_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         lines.append(
             f"• *{name_safe}*{admin_badge} \\({username_safe}\\)\n"
-            f"  📋 {len(wishes)} wish{'es' if len(wishes) != 1 else ''} | ID: `{u.telegram_id}`"
+            f"  📋 {len(wishes)} wish{'es' if len(wishes) != 1 else ''} \\| ID: `{u.telegram_id}`"
         )
 
     message_text = f"👥 *All Users* \\({len(users)} total\\)\n\n" + "\n\n".join(lines)
